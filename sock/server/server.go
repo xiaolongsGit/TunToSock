@@ -2,6 +2,7 @@ package server
 
 import (
 	"net"
+	"sync"
 	"tuntosock/conf"
 	"tuntosock/log"
 	"tuntosock/packet"
@@ -11,7 +12,7 @@ import (
 var (
 	emptyData          = []byte("1")
 	server_TCPListener *net.TCPListener
-	server_TCPTable    = make(map[string]*sock.ServerTCP, 0)
+	server_TCPTab      sync.Map
 	loginSucByte       = make([]byte, 0)
 	occupiedByte       = make([]byte, 0)
 )
@@ -80,7 +81,7 @@ func serverTCPHandle(con net.Conn) {
 		if err != nil {
 			log.Errorf("服务器TCP读取数据错误(可能对方主动退出):%v", err)
 			if src != "" {
-				delete(server_TCPTable, src)
+				server_TCPTab.Delete(src)
 				log.Infof("删除了虚拟地址:%v 路由", src)
 			}
 			return
@@ -99,7 +100,7 @@ func serverTCPHandle(con net.Conn) {
 		if err != nil {
 			log.Errorf("服务器TCP读取数据错误(可能对方主动退出):%v", err)
 			if src != "" {
-				delete(server_TCPTable, src)
+				server_TCPTab.Delete(src)
 				log.Infof("删除了虚拟地址:%v 路由", src)
 			}
 			return
@@ -117,7 +118,7 @@ func serverTCPHandle(con net.Conn) {
 		}
 		transByte := packet.PackPacket(transcopy)
 		log.Debugf("服务器TCP收到数据(type已修改):%v", transcopy)
-		_, ok := server_TCPTable[srcStr]
+		_, ok := server_TCPTab.Load(srcStr)
 		log.Debugf("服务器TCP 源地址:%v 是否找到路由表:%v", srcStr, ok)
 		switch trans.TransType {
 		case 2:
@@ -128,12 +129,12 @@ func serverTCPHandle(con net.Conn) {
 				}
 				return
 			}
-			server_TCPTable[srcStr] = &sock.ServerTCP{
+			server_TCPTab.Store(srcStr, &sock.ServerTCP{
 				Addr: remote,
 				SRC:  srcStr,
 				Mask: trans.Mask,
 				Dial: con,
-			}
+			})
 			_, err := con.Write(loginSucByte)
 			if err != nil {
 				log.Errorf("服务器-TCP返回[登录成功]发生错误:%v", err)
@@ -141,17 +142,20 @@ func serverTCPHandle(con net.Conn) {
 			log.Infof("虚拟IP:%v,掩码:%v,远程地址:%v  登录成功", srcStr, trans.Mask, remote)
 		case 6:
 			if trans.Bro == 1 {
-				for _, v := range server_TCPTable {
+				server_TCPTab.Range(func(key, value any) bool {
+					v := value.(*sock.ServerTCP)
 					if v.Addr != remote && v.Mask == trans.Mask {
 						_, err := v.Dial.Write(transByte)
 						if err != nil {
 							log.Errorf("服务器TCP写数据出错:%v", err)
 						}
 					}
-				}
+					return true
+				})
 			} else {
-				tab, ok := server_TCPTable[dstStr]
+				value, ok := server_TCPTab.Load(dstStr)
 				if ok {
+					tab := value.(*sock.ServerTCP)
 					_, err := tab.Dial.Write(transByte)
 					if err != nil {
 						log.Errorf("服务器TCP写数据出错:%v", err)
