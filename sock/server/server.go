@@ -133,7 +133,6 @@ func serverTCPHandle(con net.Conn) {
 				SRC:  srcStr,
 				Mask: trans.Mask,
 				Dial: con,
-				Lock: make(chan int, 1),
 			}
 			_, err := con.Write(loginSucByte)
 			if err != nil {
@@ -144,9 +143,7 @@ func serverTCPHandle(con net.Conn) {
 			if trans.Bro == 1 {
 				for _, v := range server_TCPTable {
 					if v.Addr != remote && v.Mask == trans.Mask {
-						v.Lock <- 1
 						_, err := v.Dial.Write(transByte)
-						<-v.Lock
 						if err != nil {
 							log.Errorf("服务器TCP写数据出错:%v", err)
 						}
@@ -155,9 +152,7 @@ func serverTCPHandle(con net.Conn) {
 			} else {
 				tab, ok := server_TCPTable[dstStr]
 				if ok {
-					tab.Lock <- 1
 					_, err := tab.Dial.Write(transByte)
-					<-tab.Lock
 					if err != nil {
 						log.Errorf("服务器TCP写数据出错:%v", err)
 					}

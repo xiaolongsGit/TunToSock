@@ -3,7 +3,6 @@ package tun
 import (
 	"fmt"
 	"net/netip"
-	"sync"
 	"tuntosock/winipcfg"
 
 	"golang.zx2c4.com/wireguard/tun"
@@ -18,8 +17,6 @@ type TUN struct {
 	rSizes []int
 	rBuffs [][]byte
 	wBuffs [][]byte
-	rMutex sync.Mutex
-	wMutex sync.Mutex
 }
 
 func NewTun(n string, m int) (*TUN, error) {
@@ -52,19 +49,6 @@ func (t *TUN) SetIPAndRoute(addr string, metric uint32, mask int) error {
 	if err2 != nil {
 		return err2
 	}
-	//
-	// ip, err := netip.ParseAddr(addr)
-	// if err != nil {
-	// 	return err
-	// }
-	// addpre, err := ip.Prefix(mask)
-	// if err != nil {
-	// 	return err
-	// }
-	// err3 := link.AddRoute(addpre, ip, metric)
-	// if err3 != nil {
-	// 	return err3
-	// }
 	return nil
 }
 func (t *TUN) DelRoute(addr string, mask int) error {
@@ -85,16 +69,12 @@ func (t *TUN) DelRoute(addr string, mask int) error {
 	return nil
 }
 func (t *TUN) Read(packet []byte) (int, error) {
-	t.rMutex.Lock()
-	defer t.rMutex.Unlock()
 	t.rBuffs[0] = packet
 	_, err := t.nt.Read(t.rBuffs, t.rSizes, t.offset)
 	return t.rSizes[0], err
 }
 
 func (t *TUN) Write(packet []byte) (int, error) {
-	t.wMutex.Lock()
-	defer t.wMutex.Unlock()
 	t.wBuffs[0] = packet
 	return t.nt.Write(t.wBuffs, t.offset)
 }

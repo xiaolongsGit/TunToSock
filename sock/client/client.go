@@ -7,15 +7,14 @@ import (
 	"tuntosock/conf"
 	"tuntosock/log"
 	"tuntosock/packet"
-	"tuntosock/sock"
 	"tuntosock/tun"
 )
 
 var (
-	emptyData                          = []byte("1")
-	client_defaultMask                 = uint8(24)
-	client_defauleDevIP                = ""
-	client_TCP          *sock.TableTCP = nil
+	emptyData                        = []byte("1")
+	client_defaultMask               = uint8(24)
+	client_defauleDevIP              = ""
+	client_TCP          *net.TCPConn = nil
 )
 
 func StartClient(t *tun.TUN, k *conf.Key) bool {
@@ -35,10 +34,7 @@ func StartClient(t *tun.TUN, k *conf.Key) bool {
 		log.Errorf("客户端-尝试TCP连接服务器失败:%v", err)
 		return false
 	}
-	client_TCP = &sock.TableTCP{
-		WLock: make(chan int, 1),
-		Dial:  tcp,
-	}
+	client_TCP = tcp
 	go clientWrite(t)
 	go clientTCPReadHandle(t)
 	return true
@@ -108,9 +104,7 @@ func clientTCPWriteHandle(data []byte, len int, ipinfo packet.IPPacket) bool {
 		pac.Bro = 1
 	}
 	log.Debugf("客户端-TCP数据:%v", pac)
-	client_TCP.WLock <- 1
-	_, err := client_TCP.Dial.Write(packet.PackPacket(pac))
-	<-client_TCP.WLock
+	_, err := client_TCP.Write(packet.PackPacket(pac))
 	if err != nil {
 		log.Errorf("客户端-TCP发数据给服务器错误(连接或许已经关闭):%v", err)
 		return false
@@ -120,7 +114,7 @@ func clientTCPWriteHandle(data []byte, len int, ipinfo packet.IPPacket) bool {
 func clientTCPReadHandle(t *tun.TUN) {
 	for {
 		receive := make([]byte, 14)
-		_, err := client_TCP.Dial.Read(receive)
+		_, err := client_TCP.Read(receive)
 		log.Debugf("客户端-TCP读取到数据(头部):%v", receive)
 		if err != nil {
 			log.Errorf("客户端-TCP读取数据错误,请关闭程序:%v", err)
@@ -129,7 +123,7 @@ func clientTCPReadHandle(t *tun.TUN) {
 		receive = append(receive, byte(1))
 		receivePac := packet.UnpackPacket(receive)
 		buf := make([]byte, receivePac.Len)
-		_, err = client_TCP.Dial.Read(buf)
+		_, err = client_TCP.Read(buf)
 		if err != nil {
 			log.Errorf("客户端-TCP读取数据错误,请关闭程序:%v", err)
 			return
@@ -173,9 +167,7 @@ func heartBeat() {
 	hbByte := packet.PackPacket(hb)
 	for {
 		time.Sleep(time.Second * 10)
-		client_TCP.WLock <- 1
-		client_TCP.Dial.Write(hbByte)
-		<-client_TCP.WLock
+		client_TCP.Write(hbByte)
 	}
 }
 func IsBroadcast(dst net.IP, mask uint8) bool {
