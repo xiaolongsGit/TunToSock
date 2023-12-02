@@ -129,7 +129,7 @@ func serverTCPHandle(con net.Conn) {
 				}
 				return
 			}
-			server_TCPTab.Store(srcStr, &sock.ServerTCP{
+			server_TCPTab.Store(srcStr, sock.ServerTCP{
 				Addr: remote,
 				SRC:  srcStr,
 				Mask: trans.Mask,
@@ -143,7 +143,7 @@ func serverTCPHandle(con net.Conn) {
 		case 6:
 			if trans.Bro == 1 {
 				server_TCPTab.Range(func(key, value any) bool {
-					v := value.(*sock.ServerTCP)
+					v := value.(sock.ServerTCP)
 					if v.Addr != remote && v.Mask == trans.Mask {
 						_, err := v.Dial.Write(transByte)
 						if err != nil {
@@ -155,7 +155,7 @@ func serverTCPHandle(con net.Conn) {
 			} else {
 				value, ok := server_TCPTab.Load(dstStr)
 				if ok {
-					tab := value.(*sock.ServerTCP)
+					tab := value.(sock.ServerTCP)
 					_, err := tab.Dial.Write(transByte)
 					if err != nil {
 						log.Errorf("服务器TCP写数据出错:%v", err)
