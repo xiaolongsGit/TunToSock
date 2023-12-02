@@ -1,0 +1,14 @@
+{
+    "LogLevel":"info",
+    "DevName":"tun",
+    "DevMask":24,
+    "DevIP":"192.168.55.55",
+    "Client":false,
+    "ClientIP":"0.0.0.0",
+    "ClientPort":11455,
+    "Server":true,
+    "ServerIP":"0.0.0.0",
+    "ServerPort":11451,
+    "RemoteServerIP":"192.168.50.118",
+    "RemoteServerPort":11451
+}
