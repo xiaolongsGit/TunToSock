@@ -75,7 +75,12 @@ func clientTryTCP(local, remote *net.TCPAddr) (bool, *net.TCPConn, error) {
 	if packet.TransType == 3 {
 		log.Infof("客户端尝试TCP连接成功")
 		data := make([]byte, packet.Len)
-		tcp.Read(data)
+		_, err := tcp.Read(data)
+		if err != nil {
+			tcp.Close()
+			log.Errorf("客户端尝试TCP连接失败:%v", err)
+			return false, nil, err
+		}
 		return true, tcp, nil
 	}
 	if packet.TransType == 4 {
@@ -112,7 +117,6 @@ func clientTCPWriteHandle(data []byte, len int, ipinfo packet.IPPacket) bool {
 	return true
 }
 func clientTCPReadHandle(t *tun.TUN) {
-	defer client_TCP.Close()
 	for {
 		receive := make([]byte, 14)
 		_, err := client_TCP.Read(receive)
@@ -137,7 +141,6 @@ func clientTCPReadHandle(t *tun.TUN) {
 	}
 }
 func clientWrite(t *tun.TUN) {
-	defer client_TCP.Close()
 	go heartBeat()
 	for {
 		data := make([]byte, 1400)
@@ -157,7 +160,6 @@ func clientWrite(t *tun.TUN) {
 	}
 }
 func heartBeat() {
-	defer client_TCP.Close()
 	hb := packet.TransPacket{
 		TransType: 5,
 		Len:       1,
