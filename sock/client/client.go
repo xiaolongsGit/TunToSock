@@ -112,6 +112,7 @@ func clientTCPWriteHandle(data []byte, len int, ipinfo packet.IPPacket) bool {
 	return true
 }
 func clientTCPReadHandle(t *tun.TUN) {
+	defer client_TCP.Close()
 	for {
 		receive := make([]byte, 14)
 		_, err := client_TCP.Read(receive)
@@ -136,6 +137,7 @@ func clientTCPReadHandle(t *tun.TUN) {
 	}
 }
 func clientWrite(t *tun.TUN) {
+	defer client_TCP.Close()
 	go heartBeat()
 	for {
 		data := make([]byte, 1400)
@@ -150,10 +152,12 @@ func clientWrite(t *tun.TUN) {
 		}
 		if !clientTCPWriteHandle(data, n, pac) {
 			log.Infof("客户端写入失败")
+			return
 		}
 	}
 }
 func heartBeat() {
+	defer client_TCP.Close()
 	hb := packet.TransPacket{
 		TransType: 5,
 		Len:       1,
@@ -167,7 +171,10 @@ func heartBeat() {
 	hbByte := packet.PackPacket(hb)
 	for {
 		time.Sleep(time.Second * 10)
-		client_TCP.Write(hbByte)
+		_, err := client_TCP.Write(hbByte)
+		if err != nil {
+			return
+		}
 	}
 }
 func IsBroadcast(dst net.IP, mask uint8) bool {

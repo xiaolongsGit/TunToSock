@@ -59,31 +59,32 @@ func serverTCP() {
 		acc, err := server_TCPListener.Accept()
 		if err != nil {
 			log.Errorf("服务器-TCP Accept失败:%v", err)
+			return
 		}
 		go serverTCPHandle(acc)
 	}
 }
 func serverTCPHandle(con net.Conn) {
+	//远端地址
+	remote := con.RemoteAddr()
+	src := ""
 	defer func() {
+		if src != "" {
+			server_TCPTab.Delete(src)
+			log.Infof("删除了虚拟地址:%v 路由", src)
+		}
 		err := recover()
 		if err != nil {
 			log.Errorf("发生意外错误:%v", err)
 		}
 	}()
 	defer con.Close()
-	//远端地址
-	remote := con.RemoteAddr()
-	src := ""
 	for {
 		//读取数据
 		head := make([]byte, 14)
 		_, err := con.Read(head)
 		if err != nil {
 			log.Errorf("服务器TCP读取数据错误(可能对方主动退出):%v", err)
-			if src != "" {
-				server_TCPTab.Delete(src)
-				log.Infof("删除了虚拟地址:%v 路由", src)
-			}
 			return
 		}
 		head = append(head, byte(1))
@@ -99,10 +100,6 @@ func serverTCPHandle(con net.Conn) {
 		_, err = con.Read(data)
 		if err != nil {
 			log.Errorf("服务器TCP读取数据错误(可能对方主动退出):%v", err)
-			if src != "" {
-				server_TCPTab.Delete(src)
-				log.Infof("删除了虚拟地址:%v 路由", src)
-			}
 			return
 		}
 		//无论是不是广播，都需要修改传输数据
@@ -127,6 +124,7 @@ func serverTCPHandle(con net.Conn) {
 				if err != nil {
 					log.Errorf("服务器TCP返回[IP被占用]发生错误:%v", err)
 				}
+				src = ""
 				return
 			}
 			server_TCPTab.Store(srcStr, sock.ServerTCP{
@@ -138,6 +136,7 @@ func serverTCPHandle(con net.Conn) {
 			_, err := con.Write(loginSucByte)
 			if err != nil {
 				log.Errorf("服务器-TCP返回[登录成功]发生错误:%v", err)
+				return
 			}
 			log.Infof("虚拟IP:%v,掩码:%v,远程地址:%v  登录成功", srcStr, trans.Mask, remote)
 		case 6:
