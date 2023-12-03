@@ -73,12 +73,12 @@ func serverTCPHandle(con net.Conn) {
 			server_TCPTab.Delete(src)
 			log.Infof("删除了虚拟地址:%v 路由", src)
 		}
+		con.Close()
 		err := recover()
 		if err != nil {
 			log.Errorf("发生意外错误:%v", err)
 		}
 	}()
-	defer con.Close()
 	for {
 		//读取数据
 		head := make([]byte, 14)

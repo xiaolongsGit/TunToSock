@@ -58,14 +58,12 @@ func clientTryTCP(local, remote *net.TCPAddr) (bool, *net.TCPConn, error) {
 	}
 	_, err = tcp.Write(packet.PackPacket(login))
 	if err != nil {
-		tcp.Close()
 		log.Errorf("客户端尝试TCP连接失败:%v", err)
 		return false, nil, err
 	}
 	retData := make([]byte, 14)
 	_, err = tcp.Read(retData)
 	if err != nil {
-		tcp.Close()
 		log.Errorf("客户端尝试TCP连接失败:%v", err)
 		return false, nil, err
 	}
@@ -75,18 +73,12 @@ func clientTryTCP(local, remote *net.TCPAddr) (bool, *net.TCPConn, error) {
 	if packet.TransType == 3 {
 		log.Infof("客户端尝试TCP连接成功")
 		data := make([]byte, packet.Len)
-		_, err := tcp.Read(data)
-		if err != nil {
-			tcp.Close()
-			log.Errorf("客户端尝试TCP连接失败:%v", err)
-			return false, nil, err
-		}
+		tcp.Read(data)
 		return true, tcp, nil
 	}
 	if packet.TransType == 4 {
 		log.Infof("该IP已被占用,请尝试其他IP")
 	}
-	tcp.Close()
 	return false, nil, err
 }
 
@@ -146,7 +138,7 @@ func clientWrite(t *tun.TUN) {
 		data := make([]byte, 1400)
 		n, err := t.Read(data)
 		if err != nil {
-			log.Errorf("客户端-虚拟设备读取出错(设备或已关闭):%v", err)
+			log.Errorf("客户端-虚拟设备读取出错:%v", err)
 			return
 		}
 		pac := packet.UnpackIPPacket(data)
@@ -175,6 +167,7 @@ func heartBeat() {
 		time.Sleep(time.Second * 10)
 		_, err := client_TCP.Write(hbByte)
 		if err != nil {
+			log.Errorf("客户端-发送心跳数据出错:%v", err)
 			return
 		}
 	}
