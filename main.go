@@ -23,13 +23,13 @@ func init() {
 	flag.IntVar(&key.DevMask, "devmask", 24, "设备掩码")
 	flag.StringVar(&key.DevIP, "devip", "192.168.55.24", "设备IP地址")
 	flag.BoolVar(&key.Client, "client", true, "是否开启客户端")
-	flag.StringVar(&key.ClientIP, "clientip", "127.0.0.1", "客户端使用的地址")
-	flag.IntVar(&key.ClientPort, "clientport", 11451, "客户端使用的端口")
+	flag.StringVar(&key.ClientIP, "clientip", "0.0.0.0", "客户端使用的地址")
+	flag.IntVar(&key.ClientPort, "clientport", 11455, "客户端使用的端口")
 	flag.BoolVar(&key.Server, "server", false, "是否开启服务端")
-	flag.StringVar(&key.ServerIP, "serverip", "127.0.0.1", "服务端监听地址")
-	flag.IntVar(&key.ServerPort, "serverport", 11455, "服务端监听端口")
+	flag.StringVar(&key.ServerIP, "serverip", "0.0.0.0", "服务端监听地址")
+	flag.IntVar(&key.ServerPort, "serverport", 11451, "服务端监听端口")
 	flag.StringVar(&key.RemoteServerIP, "remoteip", "127.0.0.1", "客户端的服务端地址")
-	flag.IntVar(&key.RemoteServerPort, "remoteport", 11455, "客户端的服务端端口")
+	flag.IntVar(&key.RemoteServerPort, "remoteport", 11451, "客户端的服务端端口")
 	flag.Parse()
 }
 func main() {

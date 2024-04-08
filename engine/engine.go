@@ -10,7 +10,6 @@ import (
 
 // siliconvn.dscloud.me
 var (
-	serverStartUp bool     = false
 	clientStartUp bool     = false
 	tunPrt        *tun.TUN = nil
 )
@@ -24,8 +23,7 @@ func Start(k *conf.Key) {
 	log.SetLevel(level)
 	if k.Server {
 		log.Infof("正在开启服务端")
-		serverStartUp = server.StartServer(k)
-		if !serverStartUp {
+		if !server.StartUDPServer(k) {
 			log.Infof("启动服务器失败，请退出程序")
 		}
 	}
