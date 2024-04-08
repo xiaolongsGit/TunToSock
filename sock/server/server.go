@@ -2,7 +2,6 @@ package server
 
 import (
 	"net"
-	"sync"
 	"tuntosock/conf"
 	"tuntosock/log"
 	"tuntosock/packet"
@@ -10,154 +9,117 @@ import (
 )
 
 var (
-	emptyData          = []byte("1")
-	server_TCPListener *net.TCPListener
-	server_TCPTab      sync.Map
-	loginSucByte       = make([]byte, 0)
-	occupiedByte       = make([]byte, 0)
+	emptyData      = []byte("1")
+	defaultIP      = packet.PackIP("127.0.0.1")
+	server_UDPConn *net.UDPConn
+	server_UDPTab  = make(map[string]sock.UDPTab)
+	loginSucByte   = make([]byte, 0)
+	occupiedByte   = make([]byte, 0)
 )
 
 func init() {
 	loginSuc := packet.TransPacket{
-		TransType: 3,
+		TransType: 203,
 		Len:       1,
-		SRC:       packet.PackIP("127.0.0.1"),
-		DST:       packet.PackIP("127.0.0.1"),
+		SRC:       defaultIP,
+		DST:       defaultIP,
+		EffIP:     defaultIP,
 		Bro:       2,
 		Pro:       20,
-		Mask:      0,
+		Mask:      24,
 		Data:      emptyData,
 	}
 	loginSucByte = packet.PackPacket(loginSuc)
 	occpied := packet.TransPacket{
-		TransType: 4,
+		TransType: 204,
 		Len:       1,
-		SRC:       packet.PackIP("127.0.0.1"),
-		DST:       packet.PackIP("127.0.0.1"),
+		SRC:       defaultIP,
+		DST:       defaultIP,
+		EffIP:     defaultIP,
 		Bro:       2,
 		Pro:       20,
-		Mask:      0,
+		Mask:      24,
 		Data:      emptyData,
 	}
 	occupiedByte = packet.PackPacket(occpied)
 }
-func StartServer(k *conf.Key) bool {
-	TCPAddr := net.TCPAddr{IP: net.ParseIP(k.ServerIP), Port: k.ServerPort}
-	TCPListener, err := net.ListenTCP("tcp", &TCPAddr)
+func StartUDPServer(k *conf.Key) bool {
+	UDPAddr := net.UDPAddr{IP: net.ParseIP(k.ServerIP), Port: k.ServerPort}
+	UDPConn, err := net.ListenUDP("udp", &UDPAddr)
 	if err != nil {
-		log.Errorf("服务器监听TCP失败:%v", err)
+		log.Errorf("服务器监听UDP失败:%v", err)
 		return false
 	}
-	log.Infof("服务器TCP启动成功")
-	server_TCPListener = TCPListener
-	go serverTCP()
+	log.Infof("服务器监听中...")
+	server_UDPConn = UDPConn
+	go serverUDP()
 	return true
 }
-func serverTCP() {
-	defer server_TCPListener.Close()
+func serverUDP() {
+	defer server_UDPConn.Close()
 	for {
-		acc, err := server_TCPListener.Accept()
+		data := make([]byte, 1500)
+		len, remote, err := server_UDPConn.ReadFrom(data)
 		if err != nil {
-			log.Errorf("服务器-TCP Accept失败:%v", err)
-			return
+			log.Errorf("服务器读取数据错误:%v", err)
+			if remote != nil {
+				for k, v := range server_UDPTab {
+					if v.Remote == remote {
+						delete(server_UDPTab, k)
+					}
+				}
+			}
 		}
-		go serverTCPHandle(acc)
-	}
-}
-func serverTCPHandle(con net.Conn) {
-	//远端地址
-	remote := con.RemoteAddr()
-	src := ""
-	defer func() {
-		if src != "" {
-			server_TCPTab.Delete(src)
-			log.Infof("删除了虚拟地址:%v 路由", src)
-		}
-		con.Close()
-		err := recover()
-		if err != nil {
-			log.Errorf("发生意外错误:%v", err)
-		}
-	}()
-	for {
-		//读取数据
-		head := make([]byte, 14)
-		_, err := con.Read(head)
-		if err != nil {
-			log.Errorf("服务器TCP读取数据错误(可能对方主动退出):%v", err)
-			return
-		}
-		head = append(head, byte(1))
+		effData := data[0:len]
 		//解析自定义包
-		trans := packet.UnpackPacket(head)
+		trans := packet.UnpackPacket(effData)
 		//传输过来的设备IP
 		srcStr := packet.UnpackIP(trans.SRC)
-		src = srcStr
+		//有效位DST
+		effIPStr := packet.UnpackIP(trans.EffIP)
 		//包目的地址
 		dstStr := packet.UnpackIP(trans.DST)
-		//接收数据
-		data := make([]byte, trans.Len)
-		_, err = con.Read(data)
-		if err != nil {
-			log.Errorf("服务器TCP读取数据错误(可能对方主动退出):%v", err)
-			return
-		}
 		//无论是不是广播，都需要修改传输数据
-		transcopy := packet.TransPacket{
-			TransType: 1,
-			Len:       trans.Len,
-			SRC:       trans.SRC,
-			DST:       trans.DST,
-			Bro:       trans.Bro,
-			Pro:       trans.Pro,
-			Mask:      trans.Mask,
-			Data:      data,
-		}
-		transByte := packet.PackPacket(transcopy)
-		log.Debugf("服务器TCP收到数据(type已修改):%v", transcopy)
-		_, ok := server_TCPTab.Load(srcStr)
-		log.Debugf("服务器TCP 源地址:%v 是否找到路由表:%v", srcStr, ok)
+		effData[0] = 201
+		log.Debugf("服务器 收到数据(type已修改):%v", effData)
+		srcTab, ok := server_UDPTab[srcStr]
+		log.Debugf("服务器 源地址:%v 路由表:%v", srcStr, srcTab)
 		switch trans.TransType {
-		case 2:
-			if ok {
-				_, err := con.Write(occupiedByte)
-				if err != nil {
-					log.Errorf("服务器TCP返回[IP被占用]发生错误:%v", err)
-				}
-				src = ""
-				return
+		case 202:
+			newTab := sock.UDPTab{
+				Remote: remote,
+				SRC:    srcStr,
+				EffIP:  effIPStr,
+				Mask:   trans.Mask,
 			}
-			server_TCPTab.Store(srcStr, sock.ServerTCP{
-				Addr: remote,
-				SRC:  srcStr,
-				Mask: trans.Mask,
-				Dial: con,
-			})
-			_, err := con.Write(loginSucByte)
+			if ok && remote.String() != srcTab.Remote.String() {
+				_, err := server_UDPConn.WriteTo(occupiedByte, srcTab.Remote)
+				if err != nil {
+					log.Errorf("服务器返回[IP被占用]发生错误:%v", err)
+				}
+			}
+			server_UDPTab[srcStr] = newTab
+			_, err := server_UDPConn.WriteTo(loginSucByte, remote)
 			if err != nil {
-				log.Errorf("服务器-TCP返回[登录成功]发生错误:%v", err)
-				return
+				log.Errorf("服务器返回[登录成功]发生错误:%v", err)
 			}
 			log.Infof("虚拟IP:%v,掩码:%v,远程地址:%v  登录成功", srcStr, trans.Mask, remote)
-		case 6:
+		case 200:
 			if trans.Bro == 1 {
-				server_TCPTab.Range(func(key, value any) bool {
-					v := value.(sock.ServerTCP)
-					if v.Addr != remote && v.Mask == trans.Mask {
-						_, err := v.Dial.Write(transByte)
+				for _, v := range server_UDPTab {
+					if v.Remote.String() != remote.String() && v.Mask == trans.Mask && v.EffIP == effIPStr {
+						_, err := server_UDPConn.WriteTo(effData, v.Remote)
 						if err != nil {
-							log.Errorf("服务器TCP写数据出错:%v", err)
+							log.Errorf("服务器写数据出错:%v", err)
 						}
 					}
-					return true
-				})
+				}
 			} else {
-				value, ok := server_TCPTab.Load(dstStr)
+				value, ok := server_UDPTab[dstStr]
 				if ok {
-					tab := value.(sock.ServerTCP)
-					_, err := tab.Dial.Write(transByte)
+					_, err := server_UDPConn.WriteTo(effData, value.Remote)
 					if err != nil {
-						log.Errorf("服务器TCP写数据出错:%v", err)
+						log.Errorf("服务器写数据出错:%v", err)
 					}
 				}
 			}

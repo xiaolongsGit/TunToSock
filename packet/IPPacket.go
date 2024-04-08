@@ -14,7 +14,7 @@ func UnpackIPPacket(data []byte) IPPacket {
 	bs := data[0]
 	pro.Version = bs >> 4
 	pro.HeadLen = int(bs << 4 >> 4)
-	pro.TotalLen = int(data[2])*256 + int(data[3])
+	pro.TotalLen = int(data[2])<<8 + int(data[3])
 	pro.SRC = data[12:16]
 	pro.DST = data[16:20]
 	pro.Protocol = data[9]
