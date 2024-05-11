@@ -17,6 +17,7 @@ var (
 	occupiedByte   = make([]byte, 0)
 )
 
+// 初始化 把登录成功和被占用 回复初始化为byte
 func init() {
 	loginSuc := packet.TransPacket{
 		TransType: 203,
@@ -60,19 +61,15 @@ func serverUDP() {
 	for {
 		data := make([]byte, 1500)
 		len, remote, err := server_UDPConn.ReadFrom(data)
+		//读取出错
 		if err != nil {
 			log.Errorf("服务器读取数据错误:%v", err)
-			if remote != nil {
-				for k, v := range server_UDPTab {
-					if v.Remote == remote {
-						delete(server_UDPTab, k)
-					}
-				}
-			}
+			//忽略这个包
+			continue
 		}
-		effData := data[0:len]
+		data = data[0:len]
 		//解析自定义包
-		trans := packet.UnpackPacket(effData)
+		trans := packet.UnpackPacket(data)
 		//传输过来的设备IP
 		srcStr := packet.UnpackIP(trans.SRC)
 		//有效位DST
@@ -80,46 +77,61 @@ func serverUDP() {
 		//包目的地址
 		dstStr := packet.UnpackIP(trans.DST)
 		//无论是不是广播，都需要修改传输数据
-		effData[0] = 201
-		log.Debugf("服务器 收到数据(type已修改):%v", effData)
-		srcTab, ok := server_UDPTab[srcStr]
-		log.Debugf("服务器 源地址:%v 路由表:%v", srcStr, srcTab)
+		data[0] = 201
+		log.Debugf("服务器 收到数据(type已修改):%v", data)
 		switch trans.TransType {
 		case 202:
+			//登录
 			newTab := sock.UDPTab{
 				Remote: remote,
 				SRC:    srcStr,
 				EffIP:  effIPStr,
-				Mask:   trans.Mask,
 			}
+			//获取源地址路由表
+			srcTab, ok := server_UDPTab[srcStr]
+			//存在且远端地址不相同（该路由已经存在，有新客户申请这个IP
+			//因为UDP没有断开连接状态，只能抢占
 			if ok && remote.String() != srcTab.Remote.String() {
 				_, err := server_UDPConn.WriteTo(occupiedByte, srcTab.Remote)
 				if err != nil {
 					log.Errorf("服务器返回[IP被占用]发生错误:%v", err)
+					continue
 				}
 			}
+			//遍历表，查找是否存在同一个remote但是不同IP
+			for k, v := range server_UDPTab {
+				if v.Remote == remote {
+					delete(server_UDPTab, k)
+					break
+				}
+			}
+			//插入新表
 			server_UDPTab[srcStr] = newTab
 			_, err := server_UDPConn.WriteTo(loginSucByte, remote)
 			if err != nil {
 				log.Errorf("服务器返回[登录成功]发生错误:%v", err)
+				continue
 			}
 			log.Infof("虚拟IP:%v,掩码:%v,远程地址:%v  登录成功", srcStr, trans.Mask, remote)
 		case 200:
+			//传输数据
 			if trans.Bro == 1 {
 				for _, v := range server_UDPTab {
-					if v.Remote.String() != remote.String() && v.Mask == trans.Mask && v.EffIP == effIPStr {
-						_, err := server_UDPConn.WriteTo(effData, v.Remote)
+					if v.Remote.String() != remote.String() && v.EffIP == effIPStr {
+						_, err := server_UDPConn.WriteTo(data, v.Remote)
 						if err != nil {
 							log.Errorf("服务器写数据出错:%v", err)
+							continue
 						}
 					}
 				}
 			} else {
 				value, ok := server_UDPTab[dstStr]
 				if ok {
-					_, err := server_UDPConn.WriteTo(effData, value.Remote)
+					_, err := server_UDPConn.WriteTo(data, value.Remote)
 					if err != nil {
 						log.Errorf("服务器写数据出错:%v", err)
+						continue
 					}
 				}
 			}

@@ -69,8 +69,8 @@ func clientTryUDP(local, remote *net.UDPAddr) (bool, *net.UDPConn, error) {
 		log.Errorf("客户端尝试连接失败(3):%v", err)
 		return false, nil, err
 	}
-	effData := data[0:len]
-	pak := packet.UnpackPacket(effData)
+	data = data[0:len]
+	pak := packet.UnpackPacket(data)
 	log.Debugf("服务器返回数据：%v", pak)
 	if pak.TransType == 203 {
 		log.Infof("客户连接服务器成功")
@@ -112,8 +112,8 @@ func clientRead(t *tun.TUN) {
 			log.Errorf("客户端-读取数据错误,请关闭程序:%v", err)
 			return
 		}
-		effReceive := receive[0:len]
-		receivePac := packet.UnpackPacket(effReceive)
+		receive = receive[0:len]
+		receivePac := packet.UnpackPacket(receive)
 		buf := receivePac.Data
 		if receivePac.TransType == 201 {
 			_, err = t.Write(buf)
